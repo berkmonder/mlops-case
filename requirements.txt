@@ -1,0 +1,9 @@
+polars
+hvplot
+pyarrow
+joblib
+scikit-learn
+scikit-lego
+fastapi
+streamlit
+mlflow

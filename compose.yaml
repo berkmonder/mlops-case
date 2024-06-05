@@ -1,0 +1,48 @@
+networks:
+  MLOPS:
+    external: false
+
+services:
+  frontend:
+    build:
+      context: '.'
+      dockerfile: docker/front/Dockerfile
+    ports:
+      - "8501:8501"
+    networks:
+      MLOPS:
+        aliases:
+          - mlops_frontend
+    volumes:
+      - app:/app/
+    depends_on:
+      - backend
+
+  backend:
+    build:
+      context: '.'
+      dockerfile: docker/api/Dockerfile
+    ports:
+      - "8000:8000"
+    networks:
+      MLOPS:
+        aliases:
+          - mlops_backend
+    volumes:
+      - app:/app/
+
+  mlflow:
+    build:
+      context: '.'
+      dockerfile: docker/mlflow/Dockerfile
+    ports:
+      - "5000:5000"
+    networks:
+      MLOPS:
+        aliases:
+          - mlops_mlflow
+    volumes:
+      - app:/app/
+
+volumes:
+  app:

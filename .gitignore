@@ -1,0 +1,6 @@
+venv/
+
+debug.log
+
+__pycache__/
+.pytest_cachemlruns
