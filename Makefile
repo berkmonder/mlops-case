@@ -36,12 +36,4 @@ serve:
 	uvicorn app:app --host 0.0.0.0 --port 8000 --reload
 
 build:
-	docker compose up -d
-
-build-api:	## Build the Anomaly Detection API Docker Image
-	docker build -t $(API_IMAGE_NAME) --file $(API_DOCKERFILE) .
-
-run-api: build-api		## Build and Run a Prediction API Container
-	docker run -d -p $(API_PORT):$(API_PORT) $(API_IMAGE_NAME)
-	@echo -------------------------------------------
-	@echo Prediction API Endpoint: http://localhost:$(API_PORT)/
+	docker compose up -d --build --remove-orphans

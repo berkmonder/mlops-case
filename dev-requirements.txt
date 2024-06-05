@@ -1,6 +1,0 @@
-ipykernel
-hiplot
-pytest
-rich
-flake8
-pdoc3

@@ -7,3 +7,9 @@ scikit-lego
 fastapi
 streamlit
 mlflow
+ipykernel
+hiplot
+pytest
+rich
+flake8
+pdoc3

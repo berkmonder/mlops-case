@@ -2,99 +2,85 @@ import os
 
 import joblib
 import polars as pl
+import altair as alt
 import streamlit as st
+from sklearn.compose import make_column_transformer
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import OneHotEncoder, OrdinalEncoder, StandardScaler
+from sklego.mixture import GMMOutlierDetector
 
-import test_request
 from model_train import train_model
 
-st.title("House price prediction")
-
-st.markdown("---")
-
-st.write("This dataset contains information about house prices and their various features.")
-st.write("It includes four columns: size, number of rooms, garden, and orientation.")
-st.write("The predicted column is the price column, which contains the predicted price of the house.")
+st.title("Anomaly Detection of the number of API requests made on that date from that county and OS combination")
 
 st.markdown("---")
 
 st.markdown("### Here is an overview of the dataset:")
-df = pl.read_csv("../data/houses.csv").head(5)
-st.dataframe(df)
+df = pl.scan_csv("./data/processed/ad_preprocessed.csv",
+                 try_parse_dates=True)
+st.dataframe(df.collect().head())
 
 st.markdown("---")
 
+X_train = (
+    df
+    .filter(
+        pl.col("date") < pl.datetime(2024, 4, 1),
+        # pl.col("country") == "XX"
+        ).collect())
 
+X_test = (
+    df
+    .filter(
+        pl.col("date") >= pl.datetime(2024, 4, 1),
+        # pl.col("country") == "XX"
+        ).collect())
 
-st.markdown("### Predict the price of a house:")
+feat_pipe = make_column_transformer(
+    (OneHotEncoder(sparse_output=False), ["country"]),
+    (OrdinalEncoder(categories=[["Y", "X", "W", "T"]]), ["os"]),
+    (StandardScaler(), ["count"])
+)
 
-size = st.number_input("Size (in m2)", min_value=0, max_value=1000, value=100)
-nb_rooms = st.number_input(
-    "Number of rooms", min_value=0, max_value=10, value=2)
-garden = st.checkbox("Garden")
-orientation = st.selectbox("Orientation", ["North", "South", "East", "West"])
+mod_pipe = make_pipeline(
+    feat_pipe,
+    GMMOutlierDetector(n_components=4*7, threshold=0.99)
+)
 
-
-if st.button("Predict"):
-    try:
-        y_pred = test_request.predict_request(size, nb_rooms, garden, orientation)
-        st.write(f"Predicted price: {y_pred['y_pred']:.0f} €")
-    except:
-        st.write("Error: could not connect to the API")
-
-st.markdown("---")
-
-nb_samples = st.number_input(
-    "Number of samples", min_value=10, max_value=10000, value=10)
-
-if st.button("Retrain model"):
-    try:
-        test_request.retrain_request(nb_samples)
-        st.write("Model retrained")
-    except:
-        st.write("Error: could not connect to the API")
-
+st.write(mod_pipe.fit(X_train))
 
 st.markdown("---")
 
-st.markdown("### Data drift")
-st.write("Here is the evolution of the AUC score of the model:")
+chart_train = alt.Chart(X_train.with_columns(
+    pl.Series(values=mod_pipe.predict(X_train) == -1, name="anomaly")
+    )).mark_tick(size=40, thickness=2, color="black", opacity=0.75).encode(
+    x="count:Q",
+    y="os:N",
+    column="country:N",
+    color=alt.condition(alt.expr.datum["anomaly"],
+                                alt.ColorValue("black"),
+                                "os:N")
+).properties(
+    height=300,
+    title="Count values per country and os for the train set"
+).interactive()
 
-if os.path.exists("datadrift_auc_train.csv"):
-    drift_df = pl.read_csv("datadrift_auc_train.csv")["auc"]
-    # check last row of drift_df
-    if len(drift_df) != 0 and drift_df.iloc[-1] > 0.5:
-        st.warning("Data drift detected")
-
-        if st.button("Reset model"):
-            try:
-                os.remove("model.joblib")
-                os.remove("../data/new_houses.csv")
-                df = pl.read_csv("../data/houses.csv")
-                df["orientation"] = df["orientation"].map(
-                    {"Nord": 0, "Est": 1, "Sud": 2, "Ouest": 3})
-                train_model(df)
-                st.write("Model reset")
-            except:
-                st.write("Error during model reset")
-                
-if os.path.exists("datadrift_auc_train.csv"):
-    drift_df = pl.read_csv("datadrift_auc_train.csv")[["auc"]]
-    st.area_chart(drift_df)
-else:
-    st.area_chart(pl.DataFrame({"auc": [0]}))
+st.altair_chart(chart_train)
 
 st.markdown("---")
 
-col1, col2, col3 = st.columns([2, 6, 1])
+chart_test = alt.Chart(X_test.with_columns(
+    pl.Series(values=mod_pipe.predict(X_test) == -1, name="anomaly")
+    )).mark_tick(size=40, thickness=2, color="black", opacity=0.75).encode(
+    x="count:Q",
+    y="os:N",
+    column="country:N",
+    color=alt.condition(alt.expr.datum["anomaly"],
+                                alt.ColorValue("black"),
+                                "os:N")
+).properties(
+    height=300,
+    title="Count values (and Anomalies) per country and os for the test set"
+).interactive()
 
-
-with col1:
-    st.write("")
-
-with col2:
-    st.image("../data/logo.jpg", width=400)
-    st.markdown("Project created by Alexandre Lemonnier and Victor Simonin")
-
-
-with col3:
-    st.write("")
+st.altair_chart(chart_test)
